@@ -7,7 +7,7 @@ from google.protobuf.json_format import MessageToDict
 from ctypes import cast, POINTER
 from comtypes import CLSCTX_ALL
 from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
-
+# Initializing the Model
 devices = AudioUtilities.GetSpeakers()
 interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
 volume = cast(interface, POINTER(IAudioEndpointVolume))
@@ -15,12 +15,12 @@ volMin,volMax = volume.GetVolumeRange()[:2]
 mpHands = mp.solutions.hands
 hands = mpHands.Hands( static_image_mode=False, model_complexity=1,	min_detection_confidence=0.75, min_tracking_confidence=0.75, max_num_hands=2)
 Draw = mp.solutions.drawing_utils
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(0) # Start capturing video from webcam
 while True:
-    _, frame = cap.read()
-    frame = cv2.flip(frame, 1)
-    frameRGB = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    results = hands.process(frameRGB)
+    _, frame = cap.read() # Read video frame by frame
+    frame = cv2.flip(frame, 1) # Flip the image
+    frameRGB = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) # Convert BGR image to RGB image
+    results = hands.process(frameRGB) # Process the RGB image
     landmarkList = []
     if results.multi_hand_landmarks:
         for handlm in results.multi_hand_landmarks:
@@ -33,26 +33,35 @@ while True:
         for i in results.multi_handedness:
                 label = MessageToDict(i)['classification'][0]['label']
                 if landmarkList != []:
-                    if label == 'Left':   #Brightness Control using Right Hand
+                    if label == 'Left':   #Brightness Control using Left Hand (Green)
                         x_1, y_1 = landmarkList[4][1], landmarkList[4][2]
                         x_2, y_2 = landmarkList[8][1], landmarkList[8][2]
                         cv2.circle(frame, (x_1, y_1), 7, (0, 255, 0), cv2.FILLED)
                         cv2.circle(frame, (x_2, y_2), 7, (0, 255, 0), cv2.FILLED)
                         cv2.line(frame, (x_1, y_1), (x_2, y_2), (0, 255, 0), 3)
                         L = hypot(x_2-x_1, y_2-y_1)
-                        b_level = np.interp(L, [15, 220], [0, 100])
-                        sbc.set_brightness(int(b_level))
-                    if label == 'Right':   #Volume Control Using Left Hand
+                        b_level = int(np.interp(L, [15, 220], [0, 100])*1.4)
+                        sbc.set_brightness(b_level)
+                        b=b_level
+                        if b>100:
+                            b=100
+                        cv2.putText(frame,str(b),(20,50),cv2.FONT_HERSHEY_COMPLEX,0.9,(0,255,0),2) #Display Brightness
+                    if label == 'Right':   #Volume Control Using Volume Hand (Blue)
                         x1,y1 = landmarkList[4][1],landmarkList[4][2]
                         x2,y2 = landmarkList[8][1],landmarkList[8][2]
                         cv2.circle(frame,(x1,y1),4,(255,0,0),cv2.FILLED)
                         cv2.circle(frame,(x2,y2),4,(255,0,0),cv2.FILLED)
                         cv2.line(frame,(x1,y1),(x2,y2),(255,0,0),3)
-                        length = hypot(x2-x1,y2-y1)*1.5
+                        length = int(hypot(x2-x1,y2-y1)*1.5)
                         vol = np.interp(length,[15,220],[volMin,volMax])
                         volume.SetMasterVolumeLevel(vol, None)
-    cv2.imshow('Image', frame)
-    if cv2.waitKey(1) & 0xff == ord('q'):
+                        v = int(length/1.5)
+                        if v>100:
+                            v=100
+                        cv2.putText(frame,str(v),(460,50),cv2.FONT_HERSHEY_COMPLEX,0.9,(255,0,0),2) #Display Volume
+    # Display Video
+    cv2.imshow('Image', frame) 
+    if cv2.waitKey(1) & 0xff == ord('q'): # When 'q' is entered, destroy the window
         break
-    if cv2.getWindowProperty('Image', cv2.WND_PROP_VISIBLE) <1:
+    if cv2.getWindowProperty('Image', cv2.WND_PROP_VISIBLE) <1: #Destroy the window using the close window button
         break
